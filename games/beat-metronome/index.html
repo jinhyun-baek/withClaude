@@ -216,13 +216,9 @@ button:active { transform: scale(0.98); }
   </div>
 </div>
 
-<!-- Essentia.js — WASM 기반 오디오 분석 라이브러리 -->
-<script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
 <script>
 // ── 상태 ──────────────────────────────────────────────────────────────────
-let essentia = null;
-let essentiaReady = false;
+const SERVER = 'http://localhost:5000';
 let audioCtx = null;
 let decodedBuffer = null;   // 재생용 원본 오디오 버퍼
 let beatTimes = [];         // 초 단위 비트 타임스탬프 배열
@@ -235,23 +231,8 @@ let nextBeatIndex = 0;
 let clickVolume = 0.7;
 let offsetMs = 0;
 let beatsPerMeasure = 4;
-let beatPhaseOffset = 0;  // 강박 위상 오프셋 (0 = 감지된 그대로)
+let beatPhaseOffset = 0;    // 강박 위상 오프셋
 let vizTimer = null;
-
-// ── Essentia 초기화 ───────────────────────────────────────────────────────
-function tryInitEssentia() {
-  if (typeof EssentiaWASM !== 'undefined' && typeof Essentia !== 'undefined') {
-    EssentiaWASM().then(WasmModule => {
-      essentia = new Essentia(WasmModule);
-      essentiaReady = true;
-    }).catch(err => {
-      console.error('Essentia WASM init failed:', err);
-    });
-  } else {
-    setTimeout(tryInitEssentia, 200);
-  }
-}
-tryInitEssentia();
 
 // ── 드래그앤드롭 ──────────────────────────────────────────────────────────
 const uploadZone = document.getElementById('upload-zone');
@@ -267,79 +248,46 @@ uploadZone.addEventListener('drop', e => {
 async function handleFile(file) {
   if (!file) return;
 
-  if (!essentiaReady) {
-    document.getElementById('lib-warn').style.display = 'block';
-    return;
-  }
   document.getElementById('lib-warn').style.display = 'none';
-
   stopAll();
   uploadZone.classList.add('has-file');
   document.getElementById('upload-sub').textContent = file.name;
-
   showAnalysis();
-  setProgress(0, '파일 읽는 중...');
+  setProgress(0, '서버에 파일 전송 중...');
 
   try {
-    // 1. 파일 읽기
+    // 1. 브라우저에서 오디오 디코딩 (재생용)
     const arrayBuffer = await file.arrayBuffer();
-    setProgress(15, '오디오 디코딩 중...');
-
-    // 2. 오디오 디코딩
     if (!audioCtx) audioCtx = new AudioContext();
-    decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    setProgress(35, '모노 44100Hz로 변환 중...');
+    setProgress(20, '오디오 디코딩 중...');
+    decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
 
-    // 3. 분석용 모노 44100Hz 버퍼 생성
-    const monoBuffer = await resampleToMono44100(decodedBuffer);
-    const monoSignal = monoBuffer.getChannelData(0);
+    // 2. librosa 서버로 파일 전송 → 비트 분석
+    setProgress(40, 'librosa 비트 분석 중... (곡 길이에 따라 10~20초)');
+    const formData = new FormData();
+    formData.append('file', file);
 
-    setProgress(55, 'BeatTrackerMultiFeature 실행 중...\n(곡 길이에 따라 10~30초 걸릴 수 있어요)');
-    document.getElementById('analysis-warn').textContent =
-      '⚠ 분석 중에는 UI가 잠시 멈출 수 있어요 — 정상입니다.';
-
-    // UI 업데이트 후 무거운 연산 시작
-    await yieldToUI();
-
-    // 4. Essentia BeatTrackerMultiFeature 실행
-    const vector = essentia.arrayToVector(monoSignal);
-    const result = essentia.BeatTrackerMultiFeature(vector);
-    beatTimes = Array.from(essentia.vectorToArray(result.ticks));
-
-    setProgress(90, '결과 계산 중...');
-    await yieldToUI();
-
-    // 5. 평균 BPM 계산 (앞쪽 20개 간격 기준)
-    if (beatTimes.length > 1) {
-      const n = Math.min(beatTimes.length - 1, 20);
-      let sum = 0;
-      for (let i = 1; i <= n; i++) sum += beatTimes[i] - beatTimes[i - 1];
-      detectedBpm = Math.round(60 / (sum / n));
+    const res = await fetch(`${SERVER}/analyze`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || '서버 오류');
     }
 
-    setProgress(100, '분석 완료!');
-    await yieldToUI(300);
+    const data = await res.json();
+    beatTimes = data.beats;
+    detectedBpm = Math.round(data.bpm);
 
+    setProgress(100, '분석 완료!');
+    await new Promise(r => setTimeout(r, 300));
     showResults();
 
   } catch (err) {
     document.getElementById('analysis-label').textContent = '오류 발생';
-    document.getElementById('status-text').textContent = err.message;
+    document.getElementById('status-text').textContent =
+      err.message.includes('fetch') ? '서버에 연결할 수 없어요 — server.py가 실행 중인지 확인해주세요' : err.message;
     document.getElementById('status-text').style.color = '#A32D2D';
     console.error(err);
   }
-}
-
-// 44100Hz 모노로 리샘플링
-async function resampleToMono44100(buffer) {
-  const targetRate = 44100;
-  const length = Math.ceil(buffer.duration * targetRate);
-  const offline = new OfflineAudioContext(1, length, targetRate);
-  const src = offline.createBufferSource();
-  src.buffer = buffer;
-  src.connect(offline.destination);
-  src.start(0);
-  return await offline.startRendering();
 }
 
 function yieldToUI(ms = 30) {
