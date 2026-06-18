@@ -1,0 +1,5 @@
+projects/
+sessions/
+session-env/
+backups/
+.last-cleanup
