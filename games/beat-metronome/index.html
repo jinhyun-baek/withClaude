@@ -364,21 +364,26 @@ function showResults() {
   document.getElementById('info-beats').textContent = beatTimes.length;
   document.getElementById('info-dur').textContent = mins + ':' + secs;
 
+  waveformPeaks = computeWaveformPeaks(decodedBuffer);
   renderBeatDots();
-  renderWaveform();
+  renderWaveform(null);
 }
 
 // ── 파형 시각화 ───────────────────────────────────────────────────────────
-let waveformPeaks = null;
+let waveformPeaks = null;       // 100 bins/초로 미리 계산된 피크 배열
+let waveformBinsPerSec = 100;
 
-function computeWaveformPeaks(buffer, numBins) {
+function computeWaveformPeaks(buffer) {
   const channel = buffer.getChannelData(0);
-  const blockSize = Math.floor(channel.length / numBins);
+  const numBins = Math.ceil(buffer.duration * waveformBinsPerSec);
+  const blockSize = channel.length / numBins;
   const peaks = new Float32Array(numBins);
   for (let i = 0; i < numBins; i++) {
+    const start = Math.floor(i * blockSize);
+    const end = Math.min(channel.length, Math.floor((i + 1) * blockSize));
     let max = 0;
-    for (let j = 0; j < blockSize; j++) {
-      const v = Math.abs(channel[i * blockSize + j]);
+    for (let j = start; j < end; j++) {
+      const v = Math.abs(channel[j]);
       if (v > max) max = v;
     }
     peaks[i] = max;
@@ -390,38 +395,46 @@ function renderWaveform(playedSecs) {
   const canvas = document.getElementById('waveform-canvas');
   const W = canvas.offsetWidth || 600;
   const H = 90;
-  canvas.width = W;
+  if (canvas.width !== W) canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  if (!waveformPeaks || waveformPeaks.length !== W) {
-    waveformPeaks = computeWaveformPeaks(decodedBuffer, W);
-  }
+  const dur = decodedBuffer.duration;
+
+  // 8마디 윈도우 — 재생 위치는 왼쪽 25%에 고정
+  const windowDur = (8 * beatsPerMeasure / detectedBpm) * 60;
+  const playheadFrac = 0.25;
+  const playheadX = Math.round(W * playheadFrac);
+  const current = playedSecs ?? 0;
+  const winStart = current - windowDur * playheadFrac;
+  const winEnd = winStart + windowDur;
 
   ctx.clearRect(0, 0, W, H);
 
   // 파형
   ctx.fillStyle = '#d0d0cc';
-  for (let i = 0; i < W; i++) {
-    const h = waveformPeaks[i] * H * 0.9;
-    ctx.fillRect(i, (H - h) / 2, 1, h);
+  for (let x = 0; x < W; x++) {
+    const t = winStart + (x / W) * windowDur;
+    if (t < 0 || t > dur) continue;
+    const bin = Math.min(waveformPeaks.length - 1, Math.round(t * waveformBinsPerSec));
+    const h = waveformPeaks[bin] * H * 0.9;
+    ctx.fillRect(x, (H - h) / 2, 1, h);
   }
 
   // 비트 마커
-  const dur = decodedBuffer.duration;
-  ctx.strokeStyle = 'rgba(60,50,137,0.55)';
+  ctx.strokeStyle = 'rgba(60,50,137,0.6)';
   ctx.lineWidth = 1;
   for (const t of beatTimes) {
-    const x = Math.round((t / dur) * W);
+    if (t < winStart || t > winEnd) continue;
+    const x = Math.round(((t - winStart) / windowDur) * W);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
 
   // 재생 위치
-  if (playedSecs != null && playedSecs >= 0) {
-    const x = Math.round((playedSecs / dur) * W);
+  if (playedSecs != null) {
     ctx.strokeStyle = '#E24B4A';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(playheadX, 0); ctx.lineTo(playheadX, H); ctx.stroke();
   }
 }
 
