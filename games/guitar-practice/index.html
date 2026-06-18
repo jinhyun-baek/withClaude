@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>기타 연습 도구</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; display: flex; justify-content: center; padding: 2rem 1rem; min-height: 100vh; }
+  .container { width: 100%; max-width: 640px; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 1.5rem; }
+  .section { background: #fff; border: 0.5px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .label { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  input[type=text], input[type=number] { padding: 8px 12px; font-size: 14px; border: 0.5px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a1a; outline: none; width: 100%; }
+  input:focus { border-color: #888; }
+  select { padding: 8px 12px; font-size: 14px; border: 0.5px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a1a; outline: none; }
+  button { padding: 8px 16px; font-size: 14px; border: 0.5px solid #ccc; border-radius: 8px; background: #fff; color: #1a1a1a; cursor: pointer; }
+  button:hover { background: #f5f5f0; }
+  button:active { transform: scale(0.98); }
+  .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn-primary:hover { opacity: 0.85; background: #1a1a1a; }
+  .bpm-row { display: flex; gap: 8px; align-items: center; }
+  .bpm-num { font-size: 32px; font-weight: 500; min-width: 60px; text-align: center; }
+  .beat-grid { display: flex; gap: 6px; margin: 0.75rem 0; }
+  .beat-dot { width: 32px; height: 32px; border-radius: 50%; background: #f0f0ec; border: 0.5px solid #ddd; transition: background 0.05s; }
+  .beat-dot.accent { border: 2px solid #aaa; }
+  .beat-dot.active-accent { background: #3C3489; border-color: #3C3489; }
+  .beat-dot.active { background: #888; border-color: #888; }
+  .offset-row { display: flex; gap: 8px; align-items: center; margin-top: 0.5rem; }
+  .offset-row input[type=range] { flex: 1; }
+  .offset-val { font-size: 13px; color: #888; min-width: 60px; text-align: right; }
+  .status { font-size: 13px; color: #888; margin-top: 0.75rem; min-height: 18px; }
+  .status.counting { color: #3C3489; font-weight: 500; }
+  .yt-wrap { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; background: #000; margin-top: 0.75rem; }
+  .yt-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; border-radius: 8px; }
+  .yt-placeholder { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #666; }
+  .tap-hint { font-size: 11px; color: #999; margin-top: 4px; }
+  .play-row { display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>기타 연습 도구</h1>
+
+  <div class="section">
+    <div class="label">YouTube 반주 URL</div>
+    <div class="row">
+      <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=..." />
+      <button onclick="loadVideo()">불러오기</button>
+    </div>
+    <div id="yt-container">
+      <div class="yt-wrap"><div class="yt-placeholder">URL을 입력하고 불러오기를 누르세요</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="label">BPM 및 박자</div>
+    <div class="bpm-row">
+      <button onclick="changeBpm(-5)">−5</button>
+      <button onclick="changeBpm(-1)">−1</button>
+      <div class="bpm-num" id="bpm-display">120</div>
+      <button onclick="changeBpm(1)">+1</button>
+      <button onclick="changeBpm(5)">+5</button>
+      <select id="time-sig" onchange="updateBeats()">
+        <option value="4">4/4</option>
+        <option value="3">3/4</option>
+        <option value="2">2/4</option>
+        <option value="6">6/8</option>
+      </select>
+      <button id="tap-btn" onclick="tapTempo()">Tap</button>
+    </div>
+    <div class="tap-hint">박자에 맞춰 Tap을 여러 번 누르면 BPM이 자동으로 감지돼요</div>
+    <div class="beat-grid" id="beat-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="label">오프셋 미세조정 (메트로놈 타이밍)</div>
+    <div class="offset-row">
+      <span style="font-size:12px;color:#999;">−500ms</span>
+      <input type="range" id="offset-slider" min="-500" max="500" value="0" step="10" oninput="updateOffset(this.value)" />
+      <span style="font-size:12px;color:#999;">+500ms</span>
+      <span class="offset-val" id="offset-val">0 ms</span>
+    </div>
+    <div style="font-size:11px;color:#999;margin-top:4px;">재생 후 메트로놈이 빠르면 − 방향, 느리면 + 방향으로 조정</div>
+  </div>
+
+  <div class="play-row">
+    <button class="btn-primary" id="play-btn" onclick="togglePlay()" style="flex:1;padding:12px;font-size:15px;">▶ 카운트인 후 재생</button>
+    <button onclick="resetAll()" style="padding:12px 16px;">초기화</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div id="yt-api"></div>
+
+<script>
+let bpm = 120, beatsPerMeasure = 4;
+let isPlaying = false, currentBeat = 0;
+let audioCtx = null, nextNoteTime = 0;
+const scheduleAhead = 0.1, lookahead = 25;
+let schedulerTimer = null;
+let offsetMs = 0, videoStarted = false;
+let tapTimes = [], ytPlayer = null, ytReady = false;
+let countInRemaining = 0, isCountIn = false;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playClick(time, isAccent) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.frequency.value = isAccent ? 1000 : 660;
+  gain.gain.setValueAtTime(isAccent ? 0.8 : 0.5, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+  osc.start(time); osc.stop(time + 0.06);
+}
+
+function scheduler() {
+  while (nextNoteTime < audioCtx.currentTime + scheduleAhead) {
+    const beat = currentBeat % beatsPerMeasure;
+    playClick(nextNoteTime, beat === 0);
+    scheduleBeatVisual(beat, nextNoteTime);
+
+    if (isCountIn) {
+      countInRemaining--;
+      if (countInRemaining <= 0) {
+        isCountIn = false;
+        const delay = (nextNoteTime - audioCtx.currentTime) * 1000 + offsetMs;
+        setTimeout(startVideo, Math.max(0, delay));
+      }
+    }
+    currentBeat++;
+    nextNoteTime += 60 / bpm;
+  }
+}
+
+function scheduleBeatVisual(beat, time) {
+  const delay = (time - audioCtx.currentTime) * 1000;
+  setTimeout(() => flashBeat(beat), Math.max(0, delay));
+}
+
+function flashBeat(beat) {
+  const dots = document.querySelectorAll('.beat-dot');
+  dots.forEach((d, i) => {
+    d.classList.remove('active', 'active-accent');
+    if (i === beat) d.classList.add(beat === 0 ? 'active-accent' : 'active');
+  });
+  if (isCountIn) {
+    const num = beatsPerMeasure - (currentBeat % beatsPerMeasure);
+    document.getElementById('status').textContent = `카운트인: ${num}...`;
+  }
+}
+
+function updateBeats() {
+  beatsPerMeasure = parseInt(document.getElementById('time-sig').value);
+  renderBeatGrid();
+}
+
+function renderBeatGrid() {
+  const grid = document.getElementById('beat-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < beatsPerMeasure; i++) {
+    const d = document.createElement('div');
+    d.className = 'beat-dot' + (i === 0 ? ' accent' : '');
+    grid.appendChild(d);
+  }
+}
+
+function changeBpm(delta) {
+  bpm = Math.min(300, Math.max(30, bpm + delta));
+  document.getElementById('bpm-display').textContent = bpm;
+}
+
+let tapTimeout = null;
+function tapTempo() {
+  const now = Date.now();
+  tapTimes.push(now);
+  if (tapTimes.length > 8) tapTimes.shift();
+  clearTimeout(tapTimeout);
+  tapTimeout = setTimeout(() => { tapTimes = []; }, 3000);
+  if (tapTimes.length >= 2) {
+    const intervals = [];
+    for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i-1]);
+    const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    bpm = Math.min(300, Math.max(30, Math.round(60000 / avg)));
+    document.getElementById('bpm-display').textContent = bpm;
+  }
+}
+
+function updateOffset(val) {
+  offsetMs = parseInt(val);
+  document.getElementById('offset-val').textContent = (val > 0 ? '+' : '') + val + ' ms';
+}
+
+function extractVideoId(url) {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function loadVideo() {
+  const url = document.getElementById('yt-url').value.trim();
+  const vid = extractVideoId(url);
+  if (!vid) { alert('올바른 YouTube URL을 입력해주세요.'); return; }
+  const container = document.getElementById('yt-container');
+  container.innerHTML = `<div class="yt-wrap"><iframe id="yt-iframe" src="https://www.youtube.com/embed/${vid}?enablejsapi=1" allowfullscreen></iframe></div>`;
+  ytReady = false;
+  loadYTApi(vid);
+}
+
+function loadYTApi(vid) {
+  if (window.YT && window.YT.Player) { createPlayer(vid); return; }
+  if (!document.getElementById('yt-script')) {
+    const s = document.createElement('script');
+    s.id = 'yt-script';
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.getElementById('yt-api').appendChild(s);
+  }
+  window.onYouTubeIframeAPIReady = () => createPlayer(vid);
+}
+
+function createPlayer(vid) {
+  ytPlayer = new YT.Player('yt-iframe', {
+    events: {
+      onReady: () => { ytReady = true; },
+      onStateChange: (e) => { if (e.data === YT.PlayerState.ENDED) stopAll(); }
+    }
+  });
+}
+
+function startVideo() {
+  if (ytReady && ytPlayer) {
+    ytPlayer.seekTo(0);
+    ytPlayer.playVideo();
+    videoStarted = true;
+    document.getElementById('status').className = 'status';
+    document.getElementById('status').textContent = '재생 중 — 박자가 맞지 않으면 오프셋을 조정하세요';
+  } else {
+    document.getElementById('status').className = 'status';
+    document.getElementById('status').textContent = '메트로놈 재생 중 (영상을 먼저 불러오세요)';
+  }
+}
+
+function togglePlay() {
+  if (isPlaying) { stopAll(); return; }
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  isPlaying = true; isCountIn = true;
+  countInRemaining = beatsPerMeasure;
+  currentBeat = 0;
+  nextNoteTime = audioCtx.currentTime + 0.1;
+  videoStarted = false;
+  document.getElementById('play-btn').textContent = '■ 정지';
+  document.getElementById('status').className = 'status counting';
+  document.getElementById('status').textContent = '카운트인 중...';
+  schedulerTimer = setInterval(scheduler, lookahead);
+}
+
+function stopAll() {
+  isPlaying = false; isCountIn = false;
+  clearInterval(schedulerTimer);
+  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active', 'active-accent'));
+  if (ytReady && ytPlayer) ytPlayer.stopVideo();
+  document.getElementById('play-btn').textContent = '▶ 카운트인 후 재생';
+  document.getElementById('status').className = 'status';
+  document.getElementById('status').textContent = '';
+}
+
+function resetAll() {
+  stopAll();
+  bpm = 120;
+  document.getElementById('bpm-display').textContent = 120;
+  document.getElementById('offset-slider').value = 0;
+  document.getElementById('offset-val').textContent = '0 ms';
+  offsetMs = 0;
+}
+
+renderBeatGrid();
+</script>
+</body>
+</html>
