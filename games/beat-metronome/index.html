@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>비트 트래킹 메트로놈</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f5f5f0;
+  color: #1a1a1a;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.container { width: 100%; max-width: 640px; }
+h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+.subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+
+.card {
+  background: #fff;
+  border: 0.5px solid #ddd;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.label { font-size: 12px; color: #888; margin-bottom: 8px; }
+
+/* Upload */
+.upload-zone {
+  background: #fff;
+  border: 1.5px dashed #ccc;
+  border-radius: 12px;
+  padding: 2.5rem 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: #888; background: #fafaf8; }
+.upload-zone .icon { font-size: 36px; margin-bottom: 10px; }
+.upload-zone .main-text { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.upload-zone .sub-text { font-size: 13px; color: #999; }
+.upload-zone.has-file { border-style: solid; border-color: #3C3489; }
+
+/* Progress */
+.progress-track { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.progress-fill { height: 100%; background: #3C3489; border-radius: 3px; transition: width 0.4s ease; width: 0%; }
+.status-text { font-size: 13px; color: #666; }
+
+/* Info grid */
+.info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+.info-cell { background: #f5f5f0; border-radius: 8px; padding: 0.875rem 1rem; text-align: center; }
+.info-cell .val { font-size: 24px; font-weight: 500; line-height: 1; margin-bottom: 4px; }
+.info-cell .key { font-size: 11px; color: #888; }
+
+/* Beat dots */
+.beat-section { display: flex; align-items: center; gap: 16px; }
+.beat-dots { display: flex; gap: 8px; }
+.beat-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #eee; border: 0.5px solid #ddd;
+  transition: background 0.04s, transform 0.04s, border-color 0.04s;
+}
+.beat-dot.accent { border: 2px solid #bbb; }
+.beat-dot.active-accent { background: #3C3489; border-color: #3C3489; transform: scale(1.25); }
+.beat-dot.active { background: #888; border-color: #888; transform: scale(1.1); }
+
+/* Progress bar */
+.pos-track { flex: 1; height: 4px; background: #eee; border-radius: 2px; position: relative; cursor: pointer; }
+.pos-fill { height: 100%; background: #3C3489; border-radius: 2px; width: 0%; }
+
+/* Sliders */
+.slider-row { display: flex; gap: 10px; align-items: center; margin-bottom: 0.75rem; }
+.slider-row:last-child { margin-bottom: 0; }
+.slider-label { font-size: 13px; color: #666; min-width: 72px; }
+.slider-row input[type=range] { flex: 1; }
+.slider-val { font-size: 13px; color: #888; min-width: 56px; text-align: right; }
+
+/* Buttons */
+button {
+  padding: 8px 16px; font-size: 14px;
+  border: 0.5px solid #ccc; border-radius: 8px;
+  background: #fff; color: #1a1a1a; cursor: pointer;
+}
+button:hover { background: #f5f5f0; }
+button:active { transform: scale(0.98); }
+.btn-primary {
+  background: #1a1a1a; color: #fff; border-color: #1a1a1a;
+  padding: 13px; font-size: 15px; width: 100%;
+  border-radius: 10px;
+}
+.btn-primary:hover { opacity: 0.85; background: #1a1a1a; }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* Messages */
+.msg { font-size: 13px; color: #888; margin-top: 8px; min-height: 18px; }
+.msg.counting { color: #3C3489; font-weight: 500; }
+.msg.error { color: #A32D2D; }
+.msg.success { color: #0F6E56; }
+
+.warn-box {
+  background: #FAEEDA; border: 0.5px solid #EF9F27;
+  border-radius: 8px; padding: 10px 12px;
+  font-size: 13px; color: #633806; margin-bottom: 1rem;
+  display: none;
+}
+
+/* Time sig selector */
+.sig-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+.sig-btn {
+  padding: 6px 14px; font-size: 13px;
+  border: 0.5px solid #ccc; border-radius: 8px;
+  background: #fff; cursor: pointer; color: #1a1a1a;
+}
+.sig-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>비트 트래킹 메트로놈</h1>
+  <p class="subtitle">MP3를 분석해서 템포 변화를 자동으로 따라가는 메트로놈</p>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">♪</div>
+    <div class="main-text">MP3 파일을 여기에 드래그하거나 클릭해서 선택</div>
+    <div class="sub-text" id="upload-sub">WAV, MP3, AAC, FLAC 모두 지원</div>
+    <input type="file" id="file-input" accept="audio/*" style="display:none" onchange="handleFile(this.files[0])">
+  </div>
+
+  <!-- Essentia not ready warning -->
+  <div class="warn-box" id="lib-warn">
+    비트 분석 라이브러리(Essentia.js)를 로드 중이에요. 잠시 후 다시 시도해주세요.
+  </div>
+
+  <!-- Analysis progress -->
+  <div class="card" id="analysis-card" style="display:none">
+    <div class="label" id="analysis-label">분석 중...</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="status-text" id="status-text"></div>
+    <div class="msg" id="analysis-warn" style="color:#BA7517;margin-top:6px;"></div>
+  </div>
+
+  <!-- Result section -->
+  <div id="result-section" style="display:none">
+
+    <!-- Song info -->
+    <div class="info-grid">
+      <div class="info-cell"><div class="val" id="info-bpm">—</div><div class="key">감지된 BPM</div></div>
+      <div class="info-cell"><div class="val" id="info-beats">—</div><div class="key">총 비트 수</div></div>
+      <div class="info-cell"><div class="val" id="info-dur">—</div><div class="key">길이</div></div>
+    </div>
+
+    <!-- Beat visualization -->
+    <div class="card">
+      <div class="label">박자 시각화</div>
+      <div class="label" style="margin-bottom:10px;">박자표</div>
+      <div class="sig-row" id="sig-row">
+        <button class="sig-btn active" onclick="setTimeSig(4,this)">4/4</button>
+        <button class="sig-btn" onclick="setTimeSig(3,this)">3/4</button>
+        <button class="sig-btn" onclick="setTimeSig(2,this)">2/4</button>
+        <button class="sig-btn" onclick="setTimeSig(6,this)">6/8</button>
+      </div>
+      <div class="beat-section">
+        <div class="beat-dots" id="beat-dots"></div>
+        <div class="pos-track" id="pos-track">
+          <div class="pos-fill" id="pos-fill"></div>
+        </div>
+      </div>
+      <div class="msg" id="play-msg"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="label">조정</div>
+      <div class="slider-row">
+        <span class="slider-label">클릭 볼륨</span>
+        <input type="range" min="0" max="1" step="0.05" value="0.7"
+          oninput="clickVolume=parseFloat(this.value); document.getElementById('vol-val').textContent=Math.round(this.value*100)+'%'">
+        <span class="slider-val" id="vol-val">70%</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">오프셋</span>
+        <input type="range" min="-500" max="500" step="10" value="0"
+          oninput="offsetMs=parseInt(this.value); document.getElementById('offset-val').textContent=(this.value>0?'+':'')+this.value+'ms'">
+        <span class="slider-val" id="offset-val">0ms</span>
+      </div>
+      <div style="font-size:11px;color:#999;margin-top:6px;">클릭이 음악보다 빠르면 오프셋 +, 느리면 −</div>
+    </div>
+
+    <button class="btn-primary" id="play-btn" onclick="togglePlay()">▶ 카운트인 후 재생</button>
+    <div class="msg" id="bottom-msg" style="text-align:center;margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- Essentia.js — WASM 기반 오디오 분석 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia-wasm.web.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js"></script>
+<script>
+// ── 상태 ──────────────────────────────────────────────────────────────────
+let essentia = null;
+let essentiaReady = false;
+let audioCtx = null;
+let decodedBuffer = null;   // 재생용 원본 오디오 버퍼
+let beatTimes = [];         // 초 단위 비트 타임스탬프 배열
+let detectedBpm = 120;
+let isPlaying = false;
+let sourceNode = null;
+let playStartTime = 0;      // 오디오 재생 시작 audioCtx.currentTime
+let schedulerTimer = null;
+let nextBeatIndex = 0;
+let clickVolume = 0.7;
+let offsetMs = 0;
+let beatsPerMeasure = 4;
+let vizTimer = null;
+
+// ── Essentia 초기화 ───────────────────────────────────────────────────────
+function tryInitEssentia() {
+  if (typeof EssentiaWASM !== 'undefined' && typeof Essentia !== 'undefined') {
+    EssentiaWASM().then(WasmModule => {
+      essentia = new Essentia(WasmModule);
+      essentiaReady = true;
+    }).catch(err => {
+      console.error('Essentia WASM init failed:', err);
+    });
+  } else {
+    setTimeout(tryInitEssentia, 200);
+  }
+}
+tryInitEssentia();
+
+// ── 드래그앤드롭 ──────────────────────────────────────────────────────────
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+// ── 파일 처리 메인 플로우 ─────────────────────────────────────────────────
+async function handleFile(file) {
+  if (!file) return;
+
+  if (!essentiaReady) {
+    document.getElementById('lib-warn').style.display = 'block';
+    return;
+  }
+  document.getElementById('lib-warn').style.display = 'none';
+
+  stopAll();
+  uploadZone.classList.add('has-file');
+  document.getElementById('upload-sub').textContent = file.name;
+
+  showAnalysis();
+  setProgress(0, '파일 읽는 중...');
+
+  try {
+    // 1. 파일 읽기
+    const arrayBuffer = await file.arrayBuffer();
+    setProgress(15, '오디오 디코딩 중...');
+
+    // 2. 오디오 디코딩
+    if (!audioCtx) audioCtx = new AudioContext();
+    decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    setProgress(35, '모노 44100Hz로 변환 중...');
+
+    // 3. 분석용 모노 44100Hz 버퍼 생성
+    const monoBuffer = await resampleToMono44100(decodedBuffer);
+    const monoSignal = monoBuffer.getChannelData(0);
+
+    setProgress(55, 'BeatTrackerMultiFeature 실행 중...\n(곡 길이에 따라 10~30초 걸릴 수 있어요)');
+    document.getElementById('analysis-warn').textContent =
+      '⚠ 분석 중에는 UI가 잠시 멈출 수 있어요 — 정상입니다.';
+
+    // UI 업데이트 후 무거운 연산 시작
+    await yieldToUI();
+
+    // 4. Essentia BeatTrackerMultiFeature 실행
+    const vector = essentia.arrayToVector(monoSignal);
+    const result = essentia.BeatTrackerMultiFeature(vector);
+    beatTimes = Array.from(essentia.vectorToArray(result.ticks));
+
+    setProgress(90, '결과 계산 중...');
+    await yieldToUI();
+
+    // 5. 평균 BPM 계산 (앞쪽 20개 간격 기준)
+    if (beatTimes.length > 1) {
+      const n = Math.min(beatTimes.length - 1, 20);
+      let sum = 0;
+      for (let i = 1; i <= n; i++) sum += beatTimes[i] - beatTimes[i - 1];
+      detectedBpm = Math.round(60 / (sum / n));
+    }
+
+    setProgress(100, '분석 완료!');
+    await yieldToUI(300);
+
+    showResults();
+
+  } catch (err) {
+    document.getElementById('analysis-label').textContent = '오류 발생';
+    document.getElementById('status-text').textContent = err.message;
+    document.getElementById('status-text').style.color = '#A32D2D';
+    console.error(err);
+  }
+}
+
+// 44100Hz 모노로 리샘플링
+async function resampleToMono44100(buffer) {
+  const targetRate = 44100;
+  const length = Math.ceil(buffer.duration * targetRate);
+  const offline = new OfflineAudioContext(1, length, targetRate);
+  const src = offline.createBufferSource();
+  src.buffer = buffer;
+  src.connect(offline.destination);
+  src.start(0);
+  return await offline.startRendering();
+}
+
+function yieldToUI(ms = 30) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('analysis-label').textContent = pct < 100 ? '분석 중...' : '분석 완료';
+}
+
+function showAnalysis() {
+  document.getElementById('analysis-card').style.display = 'block';
+  document.getElementById('result-section').style.display = 'none';
+  document.getElementById('analysis-warn').textContent = '';
+}
+
+function showResults() {
+  document.getElementById('analysis-card').style.display = 'none';
+  document.getElementById('result-section').style.display = 'block';
+
+  const dur = decodedBuffer.duration;
+  const mins = Math.floor(dur / 60);
+  const secs = String(Math.floor(dur % 60)).padStart(2, '0');
+
+  document.getElementById('info-bpm').textContent = detectedBpm;
+  document.getElementById('info-beats').textContent = beatTimes.length;
+  document.getElementById('info-dur').textContent = mins + ':' + secs;
+
+  renderBeatDots();
+}
+
+// ── 박자표 설정 ───────────────────────────────────────────────────────────
+function setTimeSig(n, btn) {
+  beatsPerMeasure = n;
+  document.querySelectorAll('.sig-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBeatDots();
+}
+
+function renderBeatDots() {
+  const container = document.getElementById('beat-dots');
+  container.innerHTML = '';
+  for (let i = 0; i < beatsPerMeasure; i++) {
+    const d = document.createElement('div');
+    d.className = 'beat-dot' + (i === 0 ? ' accent' : '');
+    container.appendChild(d);
+  }
+}
+
+// ── 재생/정지 ─────────────────────────────────────────────────────────────
+function togglePlay() {
+  if (isPlaying) { stopAll(); return; }
+  if (!decodedBuffer || beatTimes.length === 0) return;
+  startPlayback();
+}
+
+function startPlayback() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  isPlaying = true;
+  nextBeatIndex = 0;
+
+  // 카운트인: 감지된 BPM 기준으로 1마디
+  const bps = 60 / detectedBpm;
+  const countInDur = beatsPerMeasure * bps;
+  const now = audioCtx.currentTime + 0.1;
+
+  // 카운트인 클릭 스케줄링
+  for (let i = 0; i < beatsPerMeasure; i++) {
+    const t = now + i * bps;
+    scheduleClick(t, i === 0);
+    scheduleVisual(t, i % beatsPerMeasure, true, i + 1);
+  }
+
+  // 오디오 시작 시간 (카운트인 + 오프셋)
+  const audioStart = now + countInDur + offsetMs / 1000;
+  playStartTime = audioStart;
+
+  sourceNode = audioCtx.createBufferSource();
+  sourceNode.buffer = decodedBuffer;
+  sourceNode.connect(audioCtx.destination);
+  sourceNode.start(audioStart);
+  sourceNode.onended = () => { if (isPlaying) stopAll(); };
+
+  // 비트 루카헤드 스케줄러 시작
+  schedulerTimer = setInterval(beatScheduler, 25);
+
+  // 진행바 애니메이션
+  vizTimer = requestAnimationFrame(updateProgressBar);
+
+  document.getElementById('play-btn').textContent = '■ 정지';
+  setMsg('카운트인 중...', 'counting');
+
+  setTimeout(() => {
+    if (isPlaying) setMsg('재생 중 — 클릭이 박자를 자동으로 따라가요', 'success');
+  }, (countInDur + 0.2) * 1000);
+}
+
+// 루카헤드 스케줄러: 200ms 앞을 내다보며 클릭 예약
+function beatScheduler() {
+  const elapsed = audioCtx.currentTime - playStartTime;
+  const lookAhead = 0.2;
+
+  while (nextBeatIndex < beatTimes.length && beatTimes[nextBeatIndex] <= elapsed + lookAhead) {
+    const beatAbsTime = playStartTime + beatTimes[nextBeatIndex];
+    if (beatAbsTime > audioCtx.currentTime) {
+      const isAccent = (nextBeatIndex % beatsPerMeasure) === 0;
+      scheduleClick(beatAbsTime, isAccent);
+      scheduleVisual(beatAbsTime, nextBeatIndex % beatsPerMeasure, false, 0);
+    }
+    nextBeatIndex++;
+  }
+
+  if (nextBeatIndex >= beatTimes.length) clearInterval(schedulerTimer);
+}
+
+// 클릭음 생성
+function scheduleClick(time, isAccent) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.frequency.value = isAccent ? 1000 : 660;
+  gain.gain.setValueAtTime(clickVolume, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+  osc.start(time);
+  osc.stop(time + 0.06);
+}
+
+// 비트 점 시각화 예약
+function scheduleVisual(time, beatInMeasure, isCountIn, countNum) {
+  const delay = (time - audioCtx.currentTime) * 1000;
+  setTimeout(() => {
+    flashBeat(beatInMeasure);
+    if (isCountIn) setMsg(`카운트인: ${countNum}`, 'counting');
+  }, Math.max(0, delay));
+}
+
+function flashBeat(beatInMeasure) {
+  document.querySelectorAll('.beat-dot').forEach((d, i) => {
+    d.classList.remove('active', 'active-accent');
+    if (i === beatInMeasure) d.classList.add(beatInMeasure === 0 ? 'active-accent' : 'active');
+  });
+}
+
+function updateProgressBar() {
+  if (!isPlaying) return;
+  const elapsed = audioCtx.currentTime - playStartTime;
+  const pct = Math.max(0, Math.min(100, (elapsed / decodedBuffer.duration) * 100));
+  document.getElementById('pos-fill').style.width = pct + '%';
+  vizTimer = requestAnimationFrame(updateProgressBar);
+}
+
+function stopAll() {
+  isPlaying = false;
+  clearInterval(schedulerTimer);
+  cancelAnimationFrame(vizTimer);
+  if (sourceNode) { try { sourceNode.stop(); } catch (e) {} sourceNode = null; }
+  document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('active', 'active-accent'));
+  document.getElementById('pos-fill').style.width = '0%';
+  const btn = document.getElementById('play-btn');
+  if (btn) btn.textContent = '▶ 카운트인 후 재생';
+  setMsg('', '');
+}
+
+function setMsg(text, cls) {
+  const el = document.getElementById('play-msg');
+  if (el) { el.textContent = text; el.className = 'msg ' + cls; }
+}
+</script>
+</body>
+</html>
