@@ -355,8 +355,8 @@ function renderWaveform(playedSecs) {
 
   const dur = decodedBuffer.duration;
 
-  // 8마디 윈도우 — 재생 위치는 왼쪽 25%에 고정
-  const windowDur = (8 * beatsPerMeasure / detectedBpm) * 60;
+  // 2마디 윈도우 — 재생 위치는 왼쪽 25%에 고정
+  const windowDur = (2 * beatsPerMeasure / detectedBpm) * 60;
   const playheadFrac = 0.25;
   const playheadX = Math.round(W * playheadFrac);
   const current = playedSecs ?? 0;
@@ -375,12 +375,14 @@ function renderWaveform(playedSecs) {
     ctx.fillRect(x, (H - h) / 2, 1, h);
   }
 
-  // 비트 마커
-  ctx.strokeStyle = 'rgba(60,50,137,0.6)';
-  ctx.lineWidth = 1;
-  for (const t of beatTimes) {
+  // 비트 마커 — 강박은 진한 남색, 약박은 보라색
+  for (let i = 0; i < beatTimes.length; i++) {
+    const t = beatTimes[i];
     if (t < winStart || t > winEnd) continue;
+    const isAccent = ((i + beatPhaseOffset) % beatsPerMeasure) === 0;
     const x = Math.round(((t - winStart) / windowDur) * W);
+    ctx.strokeStyle = isAccent ? 'rgba(10,20,80,0.85)' : 'rgba(100,90,180,0.5)';
+    ctx.lineWidth = isAccent ? 2 : 1;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
 
