@@ -171,6 +171,11 @@ button:active { transform: scale(0.98); }
         <button class="sig-btn" onclick="setTimeSig(2,this)">2/4</button>
         <button class="sig-btn" onclick="setTimeSig(6,this)">6/8</button>
       </div>
+      <div class="label" style="margin-bottom:6px;">강박 위치</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <button onclick="shiftPhase()" style="padding:6px 16px;font-size:13px;">강박 한 박 밀기 →</button>
+        <span style="font-size:13px;color:#666;">현재 <span id="phase-label">1</span>번째 박이 강박</span>
+      </div>
       <div class="beat-section">
         <div class="beat-dots" id="beat-dots"></div>
         <div class="pos-track" id="pos-track">
@@ -230,6 +235,7 @@ let nextBeatIndex = 0;
 let clickVolume = 0.7;
 let offsetMs = 0;
 let beatsPerMeasure = 4;
+let beatPhaseOffset = 0;  // 강박 위상 오프셋 (0 = 감지된 그대로)
 let vizTimer = null;
 
 // ── Essentia 초기화 ───────────────────────────────────────────────────────
@@ -438,9 +444,19 @@ function renderWaveform(playedSecs) {
   }
 }
 
+// ── 강박 위상 조정 ────────────────────────────────────────────────────────
+function shiftPhase() {
+  beatPhaseOffset = (beatPhaseOffset + 1) % beatsPerMeasure;
+  const label = ((beatsPerMeasure - beatPhaseOffset) % beatsPerMeasure) + 1;
+  document.getElementById('phase-label').textContent = label;
+  renderBeatDots();
+}
+
 // ── 박자표 설정 ───────────────────────────────────────────────────────────
 function setTimeSig(n, btn) {
   beatsPerMeasure = n;
+  beatPhaseOffset = 0;
+  document.getElementById('phase-label').textContent = '1';
   document.querySelectorAll('.sig-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderBeatDots();
@@ -513,7 +529,7 @@ function beatScheduler() {
   while (nextBeatIndex < beatTimes.length && beatTimes[nextBeatIndex] <= elapsed + lookAhead) {
     const beatAbsTime = playStartTime + beatTimes[nextBeatIndex];
     if (beatAbsTime > audioCtx.currentTime) {
-      const isAccent = (nextBeatIndex % beatsPerMeasure) === 0;
+      const isAccent = ((nextBeatIndex + beatPhaseOffset) % beatsPerMeasure) === 0;
       scheduleClick(beatAbsTime, isAccent);
       scheduleVisual(beatAbsTime, nextBeatIndex % beatsPerMeasure, false, 0);
     }
