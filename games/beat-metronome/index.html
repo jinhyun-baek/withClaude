@@ -178,7 +178,7 @@ button:active { transform: scale(0.98); }
       <div class="label">조정</div>
       <div class="slider-row">
         <span class="slider-label">클릭 볼륨</span>
-        <input type="range" min="0" max="1" step="0.05" value="0.7"
+        <input type="range" min="0" max="5" step="0.1" value="0.7"
           oninput="clickVolume=parseFloat(this.value); document.getElementById('vol-val').textContent=Math.round(this.value*100)+'%'">
         <span class="slider-val" id="vol-val">70%</span>
       </div>
