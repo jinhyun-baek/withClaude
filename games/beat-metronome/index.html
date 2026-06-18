@@ -108,6 +108,13 @@ button:active { transform: scale(0.98); }
   display: none;
 }
 
+/* Waveform canvas */
+.waveform-wrap { position: relative; width: 100%; height: 90px; margin-top: 12px; border-radius: 6px; overflow: hidden; background: #f5f5f0; }
+#waveform-canvas { display: block; width: 100%; height: 90px; }
+.waveform-legend { display: flex; gap: 14px; margin-top: 6px; font-size: 11px; color: #999; }
+.waveform-legend span { display: flex; align-items: center; gap: 4px; }
+.legend-line { display: inline-block; width: 16px; height: 2px; }
+
 /* Time sig selector */
 .sig-row { display: flex; gap: 8px; margin-bottom: 1rem; }
 .sig-btn {
@@ -171,6 +178,14 @@ button:active { transform: scale(0.98); }
         </div>
       </div>
       <div class="msg" id="play-msg"></div>
+      <div class="waveform-wrap">
+        <canvas id="waveform-canvas"></canvas>
+      </div>
+      <div class="waveform-legend">
+        <span><span class="legend-line" style="background:#ccc;"></span> 음원 파형</span>
+        <span><span class="legend-line" style="background:#3C3489;"></span> 감지된 비트</span>
+        <span><span class="legend-line" style="background:#E24B4A;"></span> 재생 위치</span>
+      </div>
     </div>
 
     <!-- Controls -->
@@ -350,6 +365,64 @@ function showResults() {
   document.getElementById('info-dur').textContent = mins + ':' + secs;
 
   renderBeatDots();
+  renderWaveform();
+}
+
+// ── 파형 시각화 ───────────────────────────────────────────────────────────
+let waveformPeaks = null;
+
+function computeWaveformPeaks(buffer, numBins) {
+  const channel = buffer.getChannelData(0);
+  const blockSize = Math.floor(channel.length / numBins);
+  const peaks = new Float32Array(numBins);
+  for (let i = 0; i < numBins; i++) {
+    let max = 0;
+    for (let j = 0; j < blockSize; j++) {
+      const v = Math.abs(channel[i * blockSize + j]);
+      if (v > max) max = v;
+    }
+    peaks[i] = max;
+  }
+  return peaks;
+}
+
+function renderWaveform(playedSecs) {
+  const canvas = document.getElementById('waveform-canvas');
+  const W = canvas.offsetWidth || 600;
+  const H = 90;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  if (!waveformPeaks || waveformPeaks.length !== W) {
+    waveformPeaks = computeWaveformPeaks(decodedBuffer, W);
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // 파형
+  ctx.fillStyle = '#d0d0cc';
+  for (let i = 0; i < W; i++) {
+    const h = waveformPeaks[i] * H * 0.9;
+    ctx.fillRect(i, (H - h) / 2, 1, h);
+  }
+
+  // 비트 마커
+  const dur = decodedBuffer.duration;
+  ctx.strokeStyle = 'rgba(60,50,137,0.55)';
+  ctx.lineWidth = 1;
+  for (const t of beatTimes) {
+    const x = Math.round((t / dur) * W);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+
+  // 재생 위치
+  if (playedSecs != null && playedSecs >= 0) {
+    const x = Math.round((playedSecs / dur) * W);
+    ctx.strokeStyle = '#E24B4A';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
 }
 
 // ── 박자표 설정 ───────────────────────────────────────────────────────────
@@ -471,6 +544,7 @@ function updateProgressBar() {
   const elapsed = audioCtx.currentTime - playStartTime;
   const pct = Math.max(0, Math.min(100, (elapsed / decodedBuffer.duration) * 100));
   document.getElementById('pos-fill').style.width = pct + '%';
+  renderWaveform(Math.max(0, elapsed));
   vizTimer = requestAnimationFrame(updateProgressBar);
 }
 
