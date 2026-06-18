@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>끝말잇기</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; display: flex; justify-content: center; padding: 2rem 1rem; min-height: 100vh; }
+  .container { width: 100%; max-width: 560px; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 1.5rem; }
+  .status-bar { display: flex; gap: 12px; margin-bottom: 1.5rem; }
+  .stat { background: #fff; border: 0.5px solid #ddd; border-radius: 8px; padding: 0.75rem 1rem; flex: 1; text-align: center; }
+  .stat-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .stat-val { font-size: 22px; font-weight: 500; }
+  .chain-box { background: #fff; border: 0.5px solid #ddd; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; min-height: 80px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; align-content: flex-start; }
+  .word-chip { padding: 4px 12px; border-radius: 999px; font-size: 14px; font-weight: 500; }
+  .chip-player { background: #EEEDFE; color: #3C3489; }
+  .chip-ai { background: #E1F5EE; color: #085041; }
+  .chip-new { animation: pop 0.25s ease; }
+  @keyframes pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .turn-label { font-size: 13px; color: #666; margin-bottom: 8px; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .input-row input { flex: 1; padding: 8px 12px; font-size: 15px; border: 0.5px solid #ccc; border-radius: 8px; outline: none; }
+  .input-row input:focus { border-color: #888; }
+  .input-row button { padding: 8px 16px; font-size: 14px; border: 0.5px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; }
+  .input-row button:hover { background: #f5f5f0; }
+  .hint-btn { font-size: 13px; color: #666; background: #fff; border: 0.5px solid #ddd; border-radius: 8px; padding: 4px 10px; cursor: pointer; }
+  .hint-btn:hover { background: #f5f5f0; }
+  .msg { font-size: 14px; min-height: 20px; color: #666; margin-bottom: 0.5rem; }
+  .msg.err { color: #A32D2D; }
+  .msg.ok { color: #0F6E56; }
+  .game-over { background: #fff; border: 0.5px solid #ddd; border-radius: 12px; padding: 1.5rem; text-align: center; display: none; margin-top: 1rem; }
+  .game-over h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+  .game-over p { font-size: 14px; color: #666; margin-bottom: 1rem; }
+  .game-over button { padding: 8px 24px; font-size: 14px; border: 0.5px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>끝말잇기</h1>
+
+  <div class="status-bar">
+    <div class="stat"><div class="stat-label">내 점수</div><div class="stat-val" id="player-score">0</div></div>
+    <div class="stat"><div class="stat-label">AI 점수</div><div class="stat-val" id="ai-score">0</div></div>
+    <div class="stat"><div class="stat-label">연속</div><div class="stat-val" id="chain-count">0</div></div>
+    <div class="stat"><div class="stat-label">시간</div><div class="stat-val" id="timer">15</div></div>
+  </div>
+
+  <div class="turn-label" id="turn-label">내 차례 — 아무 단어나 입력하세요</div>
+  <div class="chain-box" id="chain-box"><span style="font-size:14px;color:#888;">단어 체인이 여기 표시됩니다</span></div>
+
+  <div class="msg" id="msg"></div>
+  <div class="input-row">
+    <input type="text" id="word-input" placeholder="단어를 입력하세요" maxlength="20" />
+    <button onclick="submitWord()">입력</button>
+    <button class="hint-btn" onclick="showHint()">힌트</button>
+  </div>
+
+  <div class="game-over" id="game-over">
+    <h3 id="go-title"></h3>
+    <p id="go-body"></p>
+    <button onclick="restartGame()">다시 시작</button>
+  </div>
+</div>
+
+<script>
+const WORDS = {
+  '가': ['가방','가을','가족','가수','가위'],
+  '나': ['나무','나비','나라','나팔','나침반'],
+  '다': ['다리','다음','다람쥐'],
+  '라': ['라디오','라면'],
+  '마': ['마음','마늘','마을','마라톤'],
+  '바': ['바람','바나나','바다','바위'],
+  '사': ['사과','사람','사랑','사자','사탕','사막','사슴'],
+  '아': ['아침','아이','아버지','아프리카'],
+  '자': ['자동차','자전거','자유'],
+  '차': ['차이','차가운','차도'],
+  '카': ['카메라','카드'],
+  '타': ['타조','타이'],
+  '파': ['파도','파랑','파인애플'],
+  '하': ['하늘','하루','하나','하마'],
+  '기': ['기차','기린','기억','기회','기쁨'],
+  '고': ['고양이','고구마','고추','고래'],
+  '그': ['그림','그늘'],
+  '구': ['구름','구멍','구두'],
+  '국': ['국가','국수'],
+  '물': ['물고기','물결','물병'],
+  '이': ['이름','이야기','이상','이메일','이슬'],
+  '음': ['음악','음식'],
+  '악': ['악기','악어'],
+  '도': ['도서관','도시','도움','도너츠','도토리'],
+  '시': ['시간','시작','시장'],
+  '간': ['간식','간호사'],
+  '호': ['호랑이','호수','호텔'],
+  '수': ['수박','수영','수업'],
+  '무': ['무지개','무대'],
+  '개': ['개구리','개미'],
+  '미': ['미래','미술','미소','미역'],
+  '소': ['소나무','소금','소방차'],
+  '금': ['금요일','금붕어'],
+  '요': ['요리','요구르트'],
+  '리': ['리본','리듬'],
+  '지': ['지구','지도','지갑'],
+  '과': ['과일','과자'],
+  '일': ['일기','일요일'],
+  '린': ['린스'],
+  '스': ['스케이트','스포츠'],
+  '케': ['케이크'],
+  '크': ['크레파스'],
+  '토': ['토끼','토마토'],
+  '달': ['달팽이','달빛'],
+  '색': ['색연필'],
+  '연': ['연필','연꽃'],
+  '필': ['필통'],
+  '통': ['통닭','통조림'],
+  '닭': ['닭갈비'],
+  '갈': ['갈비','갈매기'],
+  '매': ['매미','매실'],
+  '역': ['역사'],
+  '대': ['대나무','대문'],
+  '잎': ['잎사귀'],
+  '회': ['회사'],
+};
+
+const COMMON = ['사과','나무','바람','물고기','고양이','자전거','하늘','도서관','음악','기차','토끼','나비','가방','호랑이','수박','이야기','미래','사랑','구름','바나나','파도','달팽이','색연필','대나무','연꽃'];
+
+let used = new Set(), playerScore = 0, aiScore = 0, chainCount = 0;
+let currentLast = '', playerTurn = true, timerVal = 15;
+let timerInterval = null, gameActive = true;
+
+function lastChar(w) { return w[w.length - 1]; }
+
+function aiPick(startChar) {
+  let pool = (WORDS[startChar] || []).filter(w => !used.has(w) && w[0] === startChar);
+  if (!pool.length) pool = COMMON.filter(w => !used.has(w) && w[0] === startChar);
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
+
+function setMsg(text, type='') {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+}
+
+function addChip(word, who) {
+  const box = document.getElementById('chain-box');
+  if (chainCount === 0) box.innerHTML = '';
+  const chip = document.createElement('span');
+  chip.className = 'word-chip chip-new ' + (who === 'player' ? 'chip-player' : 'chip-ai');
+  chip.textContent = word;
+  box.appendChild(chip);
+}
+
+function updateStats() {
+  document.getElementById('player-score').textContent = playerScore;
+  document.getElementById('ai-score').textContent = aiScore;
+  document.getElementById('chain-count').textContent = chainCount;
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerVal = 15;
+  document.getElementById('timer').textContent = timerVal;
+  timerInterval = setInterval(() => {
+    timerVal--;
+    document.getElementById('timer').textContent = timerVal;
+    if (timerVal <= 0) { clearInterval(timerInterval); endGame('시간 초과!', '시간 안에 단어를 입력하지 못했어요.'); }
+  }, 1000);
+}
+
+function setTurnLabel() {
+  const label = document.getElementById('turn-label');
+  if (playerTurn) {
+    label.innerHTML = currentLast
+      ? `내 차례 — <strong>"${currentLast}"</strong>로 시작하는 단어를 입력하세요`
+      : '내 차례 — 아무 단어나 입력하세요';
+  } else {
+    label.textContent = 'AI 생각 중...';
+  }
+}
+
+function submitWord() {
+  if (!gameActive || !playerTurn) return;
+  const input = document.getElementById('word-input');
+  const word = input.value.trim();
+  input.value = '';
+  if (!word) return;
+  if (word.length < 2) { setMsg('두 글자 이상 입력해주세요.', 'err'); return; }
+  if (used.has(word)) { setMsg(`"${word}"는 이미 사용한 단어예요.`, 'err'); return; }
+  if (currentLast && word[0] !== currentLast) { setMsg(`"${currentLast}"로 시작하는 단어를 입력해야 해요.`, 'err'); return; }
+
+  clearInterval(timerInterval);
+  used.add(word); chainCount++; playerScore++;
+  currentLast = lastChar(word);
+  addChip(word, 'player');
+  updateStats();
+  setMsg('+1점! AI 차례입니다.', 'ok');
+  playerTurn = false; setTurnLabel();
+  document.getElementById('word-input').disabled = true;
+
+  setTimeout(() => {
+    const aiWord = aiPick(currentLast);
+    if (!aiWord) { endGame('승리!', `AI가 "${currentLast}"로 시작하는 단어를 못 찾았어요!`); return; }
+    used.add(aiWord); chainCount++; aiScore++;
+    currentLast = lastChar(aiWord);
+    addChip(aiWord, 'ai');
+    updateStats();
+    setMsg(`AI: "${aiWord}"`, '');
+    playerTurn = true; setTurnLabel();
+    document.getElementById('word-input').disabled = false;
+    document.getElementById('word-input').focus();
+    startTimer();
+  }, 800);
+}
+
+function showHint() {
+  if (!gameActive || !playerTurn || !currentLast) return;
+  const hint = COMMON.find(w => !used.has(w) && w[0] === currentLast)
+    || (WORDS[currentLast] || []).find(w => !used.has(w));
+  setMsg(hint ? `힌트: "${hint[0]}..."` : '힌트를 찾지 못했어요!', hint ? '' : 'err');
+}
+
+function endGame(title, body) {
+  clearInterval(timerInterval); gameActive = false;
+  document.getElementById('word-input').disabled = true;
+  document.getElementById('go-title').textContent = title;
+  document.getElementById('go-body').textContent = `내 점수 ${playerScore} vs AI ${aiScore} | 총 ${chainCount}개 이어짐`;
+  document.getElementById('game-over').style.display = 'block';
+}
+
+function restartGame() {
+  used = new Set(); playerScore = 0; aiScore = 0; chainCount = 0;
+  currentLast = ''; playerTurn = true; gameActive = true;
+  updateStats();
+  document.getElementById('chain-box').innerHTML = '<span style="font-size:14px;color:#888;">단어 체인이 여기 표시됩니다</span>';
+  document.getElementById('game-over').style.display = 'none';
+  document.getElementById('word-input').disabled = false;
+  document.getElementById('word-input').value = '';
+  setMsg(''); setTurnLabel(); startTimer();
+}
+
+document.getElementById('word-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitWord(); });
+setTurnLabel(); startTimer();
+</script>
+</body>
+</html>
