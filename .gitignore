@@ -3,3 +3,4 @@ sessions/
 session-env/
 backups/
 .last-cleanup
+games/beat-metronome/venv/
