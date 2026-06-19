@@ -285,6 +285,20 @@ async function handleFile(file) {
     beatTimes = data.beats;
     detectedBpm = Math.round(data.bpm);
 
+    // BeatNet이 박자표/강박 위상까지 감지해서 보내주면 자동 적용
+    if (data.timeSig) {
+      beatsPerMeasure = data.timeSig;
+      document.querySelectorAll('.sig-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.textContent[0]) === data.timeSig);
+      });
+    }
+    if (data.phase != null) {
+      beatPhaseOffset = (beatsPerMeasure - (data.phase % beatsPerMeasure)) % beatsPerMeasure;
+      const label = ((beatsPerMeasure - beatPhaseOffset) % beatsPerMeasure) + 1;
+      const phaseLabelEl = document.getElementById('phase-label');
+      if (phaseLabelEl) phaseLabelEl.textContent = label;
+    }
+
     setProgress(100, '분석 완료!');
     await new Promise(r => setTimeout(r, 300));
     showResults();

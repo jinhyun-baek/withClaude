@@ -1,6 +1,11 @@
 flask
 flask-cors
 librosa
-numpy
-
-python C:\Users\baekj\.claude\games\beat-metronome\server.py
+numpy==1.23.5
+soundfile
+Cython
+wheel
+setuptools<81
+madmom
+BeatNet
+pyaudio
