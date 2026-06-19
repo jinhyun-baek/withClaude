@@ -14,16 +14,17 @@ def analyze():
 
     file = request.files['file']
     audio_bytes = file.read()
+    start_bpm = float(request.form.get('start_bpm', 120))
 
     try:
         # librosa로 로드 (mono, 22050Hz로 자동 리샘플링)
         y, sr = librosa.load(io.BytesIO(audio_bytes), sr=22050, mono=True)
 
-        # 템포 힌트: 60~180 BPM 범위에서 탐색
+        # start_bpm 근처에서 탐색 시작 — 틀린 분할 박자로 빠지는 것을 방지
         tempo, beat_frames = librosa.beat.beat_track(
             y=y,
             sr=sr,
-            start_bpm=120,
+            start_bpm=start_bpm,
             tightness=100,   # 높을수록 일정한 템포 가정, 낮을수록 변화에 유연
             trim=False
         )

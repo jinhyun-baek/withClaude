@@ -2,3 +2,5 @@ flask
 flask-cors
 librosa
 numpy
+
+python C:\Users\baekj\.claude\games\beat-metronome\server.py

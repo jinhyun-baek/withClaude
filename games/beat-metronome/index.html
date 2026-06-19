@@ -130,6 +130,12 @@ button:active { transform: scale(0.98); }
   <h1>비트 트래킹 메트로놈</h1>
   <p class="subtitle">MP3를 분석해서 템포 변화를 자동으로 따라가는 메트로놈</p>
 
+  <!-- 예상 BPM 입력 -->
+  <div class="card" style="margin-bottom:1rem;">
+    <div class="label">예상 BPM (알고 있으면 입력 — 분석 정확도가 올라가요)</div>
+    <input type="number" id="start-bpm-input" placeholder="예: 84 (모르면 비워두세요)" min="30" max="300" style="width:100%;">
+  </div>
+
   <!-- Upload -->
   <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
     <div class="icon">♪</div>
@@ -266,6 +272,8 @@ async function handleFile(file) {
     setProgress(40, 'librosa 비트 분석 중... (곡 길이에 따라 10~20초)');
     const formData = new FormData();
     formData.append('file', file);
+    const startBpm = document.getElementById('start-bpm-input').value;
+    if (startBpm) formData.append('start_bpm', startBpm);
 
     const res = await fetch(`${SERVER}/analyze`, { method: 'POST', body: formData });
     if (!res.ok) {
